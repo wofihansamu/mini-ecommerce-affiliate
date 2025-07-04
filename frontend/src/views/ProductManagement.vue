@@ -7,10 +7,15 @@
   
       <div class="add-product-section card">
         <h2>Tambah Produk Baru</h2>
-        <form @submit.prevent="addProduct" class="product-form">
-          <div class="form-group">
+        <form class="product-form">
+          <!-- <div class="form-group">
             <label for="newId">ID Produk:</label>
             <input type="number" id="newId" v-model.number="newProduct.id" required min="1"/>
+          </div> -->
+          <div class="form-group">
+            <label for="newAffiliateLink">Link Afiliasi:</label>
+            <input type="url" id="newAffiliateLink" v-model="newProduct.affiliateLink" required />
+            <button class="btn btn-primary m-1" @click="getLinkPreview">Get Auto</button>
           </div>
           <div class="form-group">
             <label for="newName">Nama Produk:</label>
@@ -24,11 +29,8 @@
             <label for="newImageUrl">URL Gambar (Opsional):</label>
             <input type="url" id="newImageUrl" v-model="newProduct.imageUrl" />
           </div>
-          <div class="form-group">
-            <label for="newAffiliateLink">Link Afiliasi:</label>
-            <input type="url" id="newAffiliateLink" v-model="newProduct.affiliateLink" required />
-          </div>
-          <button type="submit" class="btn btn-primary">Tambah Produk</button>
+          
+          <button @click="addProduct" class="btn btn-primary">Tambah Produk</button>
         </form>
       </div>
   
@@ -105,16 +107,17 @@
   </template>
   
   <script>
+  import axios from 'axios'
   export default {
     name: 'ProductManagement',
     data() {
       return {
         products: [], // Daftar produk yang dikelola
         newProduct: {
-          id: null,
           name: '',
           description: '',
           imageUrl: '',
+          imageOthers: [],
           affiliateLink: ''
         },
         editingProduct: null, // Produk yang sedang diedit
@@ -128,6 +131,50 @@
       this.fetchProducts();
     },
     methods: {
+      async getShopeePreviewBrowser(url) {
+        // Gunakan CORS proxy untuk menghindari blokiran
+        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+        
+        // Dapatkan URL lengkap
+        const fullUrl = await fetch('api/shopee-preview?url='+url, { redirect: 'manual' })
+          .then(res => res.headers.get('location'));
+        
+        // Ekstrak IDs
+        const ids = fullUrl.match(/i\.(\d+)\.(\d+)/);
+        
+        // Ambil data produk
+        const apiUrl = `${proxyUrl}https://shopee.co.id/api/v4/item/get?itemid=${ids[2]}&shopid=${ids[1]}`;
+        
+        const response = await fetch(apiUrl, {
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Referer': fullUrl
+          }
+        });
+        
+        const data = await response.json();
+        
+        return {
+          name: data.data.name,
+          description: data.data.description,
+          mainImage: `https://cf.shopee.co.id/file/${data.data.image}`,
+          images: data.data.images?.map(img => `https://cf.shopee.co.id/file/${img}`)
+        };
+      },
+      async getLinkPreview() {
+        const shortUrl = this.newProduct.affiliateLink
+          axios.get('http://localhost:3000/api/shopee-preview?url='+shortUrl)
+          .then(res=>{
+            this.newProduct.name = res.data.name
+            this.newProduct.description = res.data.description
+            this.newProduct.imageUrl = `https://cf.shopee.co.id/file/${res.data.image}`
+            this.newProduct.imageOthers = res.data.images?.map(img => `https://cf.shopee.co.id/file/${img}`)
+          })
+          .catch(err=>{
+            console.error(err)
+          })
+
+      },
       async fetchProducts() {
         this.isLoading = true;
         try {
@@ -200,11 +247,11 @@
       },
       resetNewProductForm() {
         this.newProduct = {
-          id: null,
           name: '',
           description: '',
           imageUrl: '',
-          affiliateLink: ''
+          affiliateLink: '',
+          imageOthers: []
         };
       }
     }

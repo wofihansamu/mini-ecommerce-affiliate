@@ -1,82 +1,97 @@
+// backend/server.js
+// server.js
 const express = require('express');
-const axios = require('axios'); // Untuk membuat permintaan HTTP ke URL eksternal
-const cheerio = require('cheerio'); // Untuk parsing HTML (seperti jQuery untuk server-side)
-const cors = require('cors'); // Untuk mengizinkan permintaan dari frontend Vue Anda
+const axios = require('axios');
+const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3000; // Port default 3000
+app.use(cors());
+app.use(express.static('public'));
 
-// Middleware
-app.use(cors()); // Izinkan semua permintaan lintas domain (untuk pengembangan)
-app.use(express.json()); // Izinkan parsing JSON untuk request body
-
-// Endpoint untuk mendapatkan pratinjau link
-app.post('/api/preview-link', async (req, res) => {
-  const { url } = req.body;
-
-  if (!url) {
-    return res.status(400).json({ error: 'URL is required' });
-  }
-
+app.get('/api/shopee-preview', async (req, res) => {
   try {
-    // Lakukan permintaan HTTP ke URL yang diberikan
-    const { data } = await axios.get(url, {
-      timeout: 5000, // Timeout setelah 5 detik
-      headers: {
-        // Penting: Beberapa situs mungkin memblokir user-agent default axios.
-        // Meniru browser bisa membantu.
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    });
-
-    // Parsing HTML menggunakan Cheerio
-    const $ = cheerio.load(data);
-
-    // Ekstrak metadata
-    const title = $('head title').text() || $('meta[property="og:title"]').attr('content') || $('meta[name="twitter:title"]').attr('content') || '';
-    const description = $('meta[property="og:description"]').attr('content') || $('meta[name="description"]').attr('content') || $('meta[name="twitter:description"]').attr('content') || '';
-    const imageUrl = $('meta[property="og:image"]').attr('content') || $('meta[name="twitter:image"]').attr('content') || '';
-    const siteName = $('meta[property="og:site_name"]').attr('content') || '';
-    const favicon = $('link[rel="icon"]').attr('href') || $('link[rel="shortcut icon"]').attr('href') || '';
-
-    // Bentuk URL gambar dan favicon menjadi absolut jika relatif
-    function getAbsoluteUrl(baseUrl, relativeUrl) {
-      if (!relativeUrl) return '';
+    const shortUrl = req.query.url;
+    
+    // 1. Handle semua jenis redirect (301 dan 302)
+    const getRedirectUrl = async (url) => {
       try {
-        return new URL(relativeUrl, baseUrl).href;
-      } catch (e) {
-        return relativeUrl; // Jika gagal, kembalikan URL asli
+        const response = await axios.head(url, {
+          maxRedirects: 0,
+          validateStatus: (status) => status >= 200 && status < 400
+        });
+        return response.headers.location;
+      } catch (error) {
+        if (error.response && error.response.headers.location) {
+          return error.response.headers.location;
+        }
+        throw error;
+      }
+    };
+
+    // 2. Dapatkan URL lengkap
+    const fullUrl = await getRedirectUrl(shortUrl);
+    
+    // 3. Ekstrak ID produk dengan pola yang lebih komprehensif
+    const urlPatterns = [
+      /i\.(\d+)\.(\d+)/, // Format lama
+      /-i\.(\d+)\.(\d+)\?/, // Format baru dengan query string
+      /product\/(\d+)\/(\d+)/, // Format alternatif
+      /item\/(\d+)\/(\d+)/ // Format lainnya
+    ];
+
+    let shopId, productId;
+    for (const pattern of urlPatterns) {
+      const match = fullUrl.match(pattern);
+      if (match) {
+        shopId = match[1];
+        productId = match[2];
+        break;
       }
     }
 
-    const absoluteImageUrl = getAbsoluteUrl(url, imageUrl);
-    const absoluteFavicon = getAbsoluteUrl(url, favicon);
+    if (!shopId || !productId) {
+      throw new Error('Tidak dapat mengekstrak ID produk dari URL');
+    }
 
-
-    res.json({
-      title: title.trim(),
-      description: description.trim(),
-      imageUrl: absoluteImageUrl.trim(),
-      siteName: siteName.trim(),
-      favicon: absoluteFavicon.trim(),
-      originalUrl: url
+    // 4. Dapatkan data produk dari API Shopee
+    const apiUrl = `https://shopee.co.id/api/v4/item/get?itemid=${productId}&shopid=${shopId}`;
+    const apiResponse = await axios.get(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Referer': fullUrl,
+        'Accept': 'application/json',
+        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7'
+      },
+      timeout: 5000
     });
 
-  } catch (error) {
-    console.error('Error fetching or parsing URL:', error.message);
-    let errorMessage = 'Failed to fetch link preview.';
-    if (error.response && error.response.status === 404) {
-      errorMessage = 'Link not found (404).';
-    } else if (error.code === 'ECONNABORTED') {
-      errorMessage = 'Request timed out.';
-    } else if (error.code === 'ENOTFOUND') {
-      errorMessage = 'Invalid domain or network issue.';
+    // 5. Validasi respons API
+    if (!apiResponse.data || !apiResponse.data.data) {
+      throw new Error('Respons API Shopee tidak valid');
     }
-    res.status(500).json({ error: errorMessage, details: error.message });
+
+    const productData = apiResponse.data.data;
+    
+    // 6. Format respons
+    const result = {
+      name: productData.name,
+      description: productData.description,
+      mainImage: `https://cf.shopee.co.id/file/${productData.image}`,
+      images: productData.images.map(img => `https://cf.shopee.co.id/file/${img}`),
+      price: productData.price / 100000,
+      rating: productData.item_rating?.rating_star || 0,
+      shopName: productData.shop_name || ''
+    };
+
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ 
+      error: error.message || 'Terjadi kesalahan saat memproses permintaan'
+    });
   }
 });
 
-// Mulai server
-app.listen(PORT, () => {
-  console.log(`Backend server running on http://localhost:${PORT}`);
-});
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
