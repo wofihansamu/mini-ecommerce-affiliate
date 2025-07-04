@@ -1,0 +1,44 @@
+[
+  {
+    "id": 12345678,
+    "name": "Smartphone A",
+    "description": "Smartphone canggih dengan kamera terbaik.",
+    "imageUrl": "https://dummyimage.com/600x400/000/fff",
+    "affiliateLink": "https://example.com/affiliate/smartphone-a"
+  },
+  {
+    "id": 2,
+    "name": "Laptop Gaming X",
+    "description": "Performa tinggi untuk gaming dan produktivitas.",
+    "imageUrl": "https://dummyimage.com/600x400/000/fff",
+    "affiliateLink": "https://example.com/affiliate/laptop-gaming-x"
+  },
+  {
+    "id": 3,
+    "name": "Smartwatch Y",
+    "description": "Lacak kebugaran dan notifikasi di pergelangan tangan Anda.",
+    "imageUrl": "https://dummyimage.com/600x400/000/fff",
+    "affiliateLink": "https://example.com/affiliate/smartwatch-y"
+  },
+  {
+    "id": 4,
+    "name": "Headphone Z",
+    "description": "Kualitas suara premium dengan noise cancellation.",
+    "imageUrl": null,
+    "affiliateLink": "https://example.com/affiliate/headphone-z"
+  },
+  {
+    "id": 5,
+    "name": "Kamera DSLR Pro",
+    "description": "Abadikan momen dengan detail luar biasa.",
+    "imageUrl": "https://dummyimage.com/600x400/000/fff",
+    "affiliateLink": "https://example.com/affiliate/camera-dslr-pro"
+  },
+  {
+    "id": 6,
+    "name": "Keyboard Mekanik",
+    "description": "Pengalaman mengetik yang tak tertandingi.",
+    "imageUrl": null,
+    "affiliateLink": "https://example.com/affiliate/keyboard-mechanical"
+  }
+]
