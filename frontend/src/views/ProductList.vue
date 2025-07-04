@@ -46,6 +46,7 @@ export default {
   },
   data() {
     return {
+      apiUrl: window.api_server,
       allProducts: [],       // Semua produk dari JSON
       displayedProducts: [], // Produk yang saat ini ditampilkan
       searchTerm: '',
@@ -89,7 +90,7 @@ export default {
     async fetchAllProducts() {
       this.isLoading = true;
       try {
-        const response = await fetch('/products.json');
+        const response = await fetch(this.apiUrl + '/api/product');
         if (!response.ok) {
           throw new Error('Failed to fetch products');
         }
@@ -169,14 +170,15 @@ export default {
 <style lang="scss" scoped>
 .product-list-page {
   padding: 0 15px 15px; /* Sesuaikan padding agar konten tidak terpotong sticky header */
-  max-width: 600px;
+  // max-width: 600px;
+  width: 85vw;
   margin: 0 auto;
 }
 
 .app-header {
   text-align: center;
   margin-bottom: 0;
-  width: 85vw;
+  // width: 85vw;
   padding: 15px;
   background-color: rgb(107, 51, 236);
   position: sticky;
@@ -201,7 +203,7 @@ export default {
   position: sticky;
   top: 70px;
   z-index: 999;
-  width: 85vw;
+  // width: 85vw;
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
   border-bottom-left-radius: 8px;
   border-bottom-right-radius: 8px;

@@ -14,12 +14,12 @@
           </div> -->
           <div class="form-group">
             <label for="newAffiliateLink">Link Afiliasi:</label>
-            <input type="url" id="newAffiliateLink" v-model="newProduct.affiliateLink" required />
+            <input autocomplete="off" type="url" id="newAffiliateLink" v-model="newProduct.affiliateLink" required />
             <button class="btn btn-primary m-1" @click="getLinkPreview">Get Auto</button>
           </div>
           <div class="form-group">
             <label for="newName">Nama Produk:</label>
-            <input type="text" id="newName" v-model="newProduct.name" required />
+            <input autocomplete="off" type="text" id="newName" v-model="newProduct.name" required />
           </div>
           <div class="form-group">
             <label for="newDescription">Deskripsi:</label>
@@ -27,7 +27,7 @@
           </div>
           <div class="form-group">
             <label for="newImageUrl">URL Gambar (Opsional):</label>
-            <input type="url" id="newImageUrl" v-model="newProduct.imageUrl" />
+            <input autocomplete="off" type="url" id="newImageUrl" v-model="newProduct.imageUrl" />
           </div>
           
           <button @click="addProduct" class="btn btn-primary">Tambah Produk</button>
@@ -64,10 +64,10 @@
         <div class="modal-content">
           <h2>Edit Produk</h2>
           <form @submit.prevent="updateProduct" class="product-form">
-            <div class="form-group">
+            <!-- <div class="form-group">
               <label for="editId">ID Produk:</label>
               <input type="number" id="editId" v-model.number="editingProduct.id" required readonly />
-            </div>
+            </div> -->
             <div class="form-group">
               <label for="editName">Nama Produk:</label>
               <input type="text" id="editName" v-model="editingProduct.name" required />
@@ -112,6 +112,7 @@
     name: 'ProductManagement',
     data() {
       return {
+        apiUrl : window.api_server,
         products: [], // Daftar produk yang dikelola
         newProduct: {
           name: '',
@@ -163,7 +164,7 @@
       },
       async getLinkPreview() {
         const shortUrl = this.newProduct.affiliateLink
-          axios.get('http://localhost:3000/api/shopee-preview?url='+shortUrl)
+          axios.get(this.apiUrl + '/api/shopee-preview?url='+shortUrl)
           .then(res=>{
             this.newProduct.name = res.data.name
             this.newProduct.description = res.data.description
@@ -178,35 +179,35 @@
       async fetchProducts() {
         this.isLoading = true;
         try {
-          const response = await fetch('/products.json');
+          const response = await fetch(this.apiUrl + '/api/product');
           if (!response.ok) {
             throw new Error('Failed to fetch products');
           }
-          // Menggunakan JSON.parse(JSON.stringify(data)) untuk membuat deep copy
-          // agar perubahan lokal tidak mempengaruhi data awal dari fetch
           this.products = JSON.parse(JSON.stringify(await response.json()));
         } catch (error) {
           console.error('Error fetching products:', error);
-          // Tampilkan pesan error kepada pengguna jika perlu
         } finally {
           this.isLoading = false;
         }
       },
       addProduct() {
-        if (!this.newProduct.id || !this.newProduct.name || !this.newProduct.description || !this.newProduct.affiliateLink) {
+        if (!this.newProduct.name || !this.newProduct.description || !this.newProduct.affiliateLink) {
           alert('Mohon lengkapi semua bidang yang wajib diisi.');
           return;
         }
-  
-        // Cek apakah ID sudah ada
-        if (this.products.some(p => p.id === this.newProduct.id)) {
-          alert('ID Produk sudah ada. Mohon gunakan ID yang berbeda.');
-          return;
-        }
-  
-        this.products.push({ ...this.newProduct }); // Tambahkan salinan produk baru
-        this.resetNewProductForm();
-        alert('Produk berhasil ditambahkan!');
+        axios.post(this.apiUrl + '/api/product',{
+          item: this.newProduct
+        }).then(res=>{
+          this.products.push({ ...this.newProduct });
+          this.resetNewProductForm();
+          alert(res.data);
+          this.fetchProducts();
+          })
+          .catch(err=>{
+            console.error(err)
+            alert(err.message);
+          })
+        
       },
       editProduct(product) {
         // Membuat salinan produk untuk diedit agar tidak langsung mengubah data asli
@@ -218,24 +219,36 @@
           alert('Mohon lengkapi semua bidang yang wajib diisi.');
           return;
         }
-  
-        const index = this.products.findIndex(p => p.id === this.editingProduct.id);
-        if (index !== -1) {
-          this.products.splice(index, 1, { ...this.editingProduct }); // Ganti produk lama dengan yang baru
-          this.showEditModal = false;
-          this.editingProduct = null;
-          alert('Produk berhasil diperbarui!');
-        }
+        axios.put(this.apiUrl + '/api/product',{
+          item: this.editingProduct
+        }).then(res=>{
+            const index = this.products.findIndex(p => p.id === this.editingProduct.id);
+            this.products.splice(index, 1, { ...this.editingProduct }); // Ganti produk lama dengan yang baru
+            this.showEditModal = false;
+            this.editingProduct = null;
+            alert(res.data);
+          })
+          .catch(err=>{
+            console.error(err)
+            alert(err.message);
+          })
       },
       confirmDelete(id) {
         this.productIdToDelete = id;
         this.showConfirmDialog = true;
       },
       deleteProduct() {
-        this.products = this.products.filter(p => p.id !== this.productIdToDelete);
-        this.showConfirmDialog = false;
-        this.productIdToDelete = null;
-        alert('Produk berhasil dihapus!');
+        axios.delete(this.apiUrl + '/api/product/'+this.productIdToDelete)
+          .then(res=>{
+            this.showConfirmDialog = false;
+            this.productIdToDelete = null;
+            alert(res.data);
+            this.fetchProducts();
+          })
+          .catch(err=>{
+            console.error(err)
+            alert(err.message);
+          })
       },
       cancelEdit() {
         this.showEditModal = false;

@@ -6,6 +6,8 @@ router.afterEach((to) => { // Hook setelah setiap navigasi rute
   document.title = to.meta.title || "Petra's Store"; // Atur judul halaman
 });
 
+window.api_server = process.env.NODE_ENV == 'development' ? 'http://'+location.hostname+':3000' : location.origin
+
 // Membuat instance aplikasi Vue
 // dan memasangkannya (mount) ke elemen dengan id "app" di public/index.html
 createApp(App)

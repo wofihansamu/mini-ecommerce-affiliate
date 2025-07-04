@@ -1,12 +1,115 @@
 // backend/server.js
 // server.js
+require("dotenv").config()
+const env = process.env
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
+const mysql2 = require('mysql2')
+const rateLimit = require('express-rate-limit')
+const helmet = require('helmet')
+const path = require('path')
+
+const toSource = new URL(env.MYSQL_DB_URI);
+const poolMiddleWare = mysql2.createPool({
+  host: toSource.hostname,
+  port: toSource.port,
+  user: toSource.username,
+  password: toSource.password,
+  database: toSource.pathname.substring(1),
+  waitForConnections: true,
+  multipleStatements: true,
+  enableKeepAlive: false, 
+  maxIdle: 2,
+  idleTimeout: 30000, 
+  connectTimeout: 60000,
+  connectionLimit: 20, 
+  queueLimit: 0
+});
+
+function expressDb(req, res, next){
+  req.db = poolMiddleWare.promise();
+  next();
+}
+
+const limiter = rateLimit({
+	windowMs: 10 * 1000, //in  second
+	max: 200, // Limit each IP to requests per `window` 
+	standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+	legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+})
 
 const app = express();
 app.use(cors());
+app.use(expressDb);
 app.use(express.static('public'));
+app.use(limiter)
+app.disable('x-powered-by')
+app.set('trust proxy', 1)
+app.use(helmet())
+app.use(express.json({limit: '5mb'}));
+app.use(express.urlencoded({extended: true, limit: '5mb'}));
+
+app.get('/api/product', async (req, res) => {
+  try {
+    const [lists] = await req.db.query(`select * from list_item order by id desc`);
+    res.json(lists);
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ 
+      error: error.message || 'Terjadi kesalahan saat memproses permintaan'
+    });
+  }
+});
+
+app.post('/api/product', async (req, res) => {
+  try {
+    const item = req.body.item
+    await req.db.query(`insert into list_item (name, description, imageUrl, affiliateLink) values (?,?,?,?)`,[
+      item.name,
+      item.description,
+      item.imageUrl,
+      item.affiliateLink
+    ])
+    res.send('Product Berhasil ditambah')
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ 
+      error: error.message || 'Terjadi kesalahan saat memproses permintaan'
+    });
+  }
+});
+app.delete('/api/product/:id', async (req, res) => {
+  try {
+    await req.db.query(`delete from list_item where id=?`,[
+      req.params.id
+    ])
+    res.send('Product Berhasil Dihapus')
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ 
+      error: error.message || 'Terjadi kesalahan saat memproses permintaan'
+    });
+  }
+});
+app.put('/api/product', async (req, res) => {
+  try {
+    const item = req.body.item
+    await req.db.query(`update list_item set name=?, description=?, imageUrl=?, affiliateLink=? where id=?`,[
+      item.name,
+      item.description,
+      item.imageUrl,
+      item.affiliateLink,
+      item.id
+    ])
+    res.send('Product Berhasil diUpdate')
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ 
+      error: error.message || 'Terjadi kesalahan saat memproses permintaan'
+    });
+  }
+});
 
 app.get('/api/shopee-preview', async (req, res) => {
   try {
@@ -93,5 +196,26 @@ app.get('/api/shopee-preview', async (req, res) => {
   }
 });
 
+app.get(/.*/, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+}); 
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+const server = app.listen(PORT, () => {
+	console.log(`Server running on port ${PORT}`)
+})
+
+process.on('SIGINT', ()=>{
+	server.close(() => {
+		console.log('HTTP server closed')
+		process.exit()
+	})
+})
+
+process.on('SIGTERM', ()=>{
+	server.close(() => {
+		console.log('HTTP server closed')
+		process.exit()
+	})
+})

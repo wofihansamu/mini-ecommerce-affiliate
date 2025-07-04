@@ -1,11 +1,32 @@
 services:
   app:
-    image: 'jc21/nginx-proxy-manager:latest'
+    image: 'wofihansamu/mini-ecommerce-affiliate:latest'
     restart: always
     ports:
-      - '80:80'
-      - '81:81'
-      - '443:443'
+      - '3000:3000'
+    environment:
+      MYSQL_DB_URI: "mysql://root:root@mdb:3306/store"
+    depends_on:
+      - mdb
+    networks:
+      - hansamu-network
+      
+  mdb:
+    image: mariadb:10.6.20
+    container_name: mdb
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_REPLICATION_USER: repl_user
+      MYSQL_REPLICATION_PASSWORD: repl_password
     volumes:
-      - ./data:/data
-      - ./letsencrypt:/etc/letsencrypt
+      - ./database/master.cnf:/etc/mysql/conf.d/master.cnf:ro
+      - ./database/data:/var/lib/mysql
+    networks:
+      - hansamu-network
+      
+networks:
+  hansamu-network:
+    driver: bridge
+    external: true 
+   
